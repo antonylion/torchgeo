@@ -407,6 +407,7 @@ class SSL4EOS12(NonGeoDataset):
         root: Path = 'data',
         split: str = 's2c',
         seasons: int = 1,
+        subdir: str = "data/s2_l2c",
         transforms: Callable[[dict[str, Tensor]], dict[str, Tensor]] | None = None,
         checksum: bool = False,
     ) -> None:
@@ -432,10 +433,12 @@ class SSL4EOS12(NonGeoDataset):
         self.root = root
         self.split = split
         self.seasons = seasons
+        self.subdir = subdir
         self.transforms = transforms
         self.checksum = checksum
 
         self.bands = self.metadata[self.split]['bands']
+        self.scenes = sorted(os.listdir(self.subdir))
 
         self._verify()
 
@@ -448,18 +451,17 @@ class SSL4EOS12(NonGeoDataset):
         Returns:
             image sample
         """
-        root = os.path.join(self.root, self.split, f'{index:07}')
+        root = os.path.join(self.subdir, self.scenes[index])
         subdirs = os.listdir(root)
         subdirs = random.sample(subdirs, self.seasons)
 
         images = []
         for subdir in subdirs:
             directory = os.path.join(root, subdir)
-            for band in self.bands:
-                filename = os.path.join(directory, f'{band}.tif')
-                with rasterio.open(filename) as f:
-                    image = f.read(out_shape=(1, self.size, self.size))
-                    images.append(torch.from_numpy(image.astype(np.float32)))
+            filename = os.path.join(directory, 'all_bands.tif')
+            with rasterio.open(filename) as f:
+                image = f.read()
+                images.append(torch.from_numpy(image.astype(np.float32)))
 
         sample = {'image': torch.cat(images)}
 
@@ -474,7 +476,7 @@ class SSL4EOS12(NonGeoDataset):
         Returns:
             length of the dataset
         """
-        return 251079
+        return len(self.scenes)
 
     def _verify(self) -> None:
         """Verify the integrity of the dataset."""
